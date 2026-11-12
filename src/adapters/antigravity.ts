@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { fetch as undiciFetch } from "undici";
 import type {
@@ -37,13 +38,14 @@ export class AntigravityAdapter implements QuotaAdapter {
   private pendingRequests = new Map<string, Promise<AgyQuotaSummary>>();
 
   supports(model?: Model<any>): boolean {
-    return model?.provider === "antigravity";
+    const provider = model?.provider || "";
+    return /^(google-)?antigravity$|^agy$/i.test(provider);
   }
 
   /**
    * 通过指定的 OAuth access token 拉取配额
    */
-  async fetchUsageWithToken(token: string, force = false): Promise<AgyQuotaSummary> {
+  async fetchUsageWithToken(token: string, force = false, timeoutMs = 15_000): Promise<AgyQuotaSummary> {
     const now = Date.now();
     const cached = this.cache.get(token);
     if (!force && cached && now - cached.fetchedAt < CACHE_TTL_MS) {
@@ -67,7 +69,7 @@ export class AntigravityAdapter implements QuotaAdapter {
               "User-Agent": USER_AGENT,
             },
             body: JSON.stringify({}),
-            signal: AbortSignal.timeout(15_000),
+            signal: AbortSignal.timeout(timeoutMs),
           });
 
           if (res.ok) {
@@ -107,17 +109,26 @@ export class AntigravityAdapter implements QuotaAdapter {
   }
 
   /**
-   * 尝试读取本地多账号存储（如果存在）
+   * 尝试读取本地多账号存储（优先当前 profile，回退到 ~/.pi/agent）
    */
   async loadMultiAccounts(): Promise<AgyAccountsStore | null> {
-    try {
-      const agentDir = getAgentDir();
-      const accountsPath = join(agentDir, "antigravity-accounts.json");
-      const content = await readFile(accountsPath, "utf8");
-      return JSON.parse(content) as AgyAccountsStore;
-    } catch {
-      return null;
+    const candidates = [
+      join(getAgentDir(), "antigravity-accounts.json"),
+      join(homedir(), ".pi", "agent", "antigravity-accounts.json"),
+    ];
+
+    for (const filePath of candidates) {
+      try {
+        const content = await readFile(filePath, "utf8");
+        const parsed = JSON.parse(content) as AgyAccountsStore;
+        if (parsed?.accounts && typeof parsed.accounts === "object") {
+          return parsed;
+        }
+      } catch {
+        // 继续尝试下一个候选路径
+      }
     }
+    return null;
   }
 
   /**
@@ -228,11 +239,11 @@ export class AntigravityAdapter implements QuotaAdapter {
         const percent = typeof fraction === "number" ? fraction * 100 : undefined;
         const bar = percent !== undefined ? renderProgressBar(percent) : "未知";
         const reset = formatIsoReset(bucket.resetTime);
-        lines.push(`  • ${bucket.displayName || bucket.bucketId || "限额"}：${bar} （${reset}后重置）`);
+        lines.push(`  • ${bucket.displayName || bucket.bucketId || "限额"}：${bar} （${reset}重置）`);
       }
     }
 
-    // 多账号感知扩展卡片
+    // 多账号感知扩展卡片：并发拉取 + Token 有效期预检
     if (store?.accounts) {
       const otherAccounts = Object.entries(store.accounts).filter(
         ([email]) => email !== activeEmail,
@@ -240,10 +251,21 @@ export class AntigravityAdapter implements QuotaAdapter {
 
       if (otherAccounts.length > 0) {
         lines.push(`\n${"-".repeat(32)}\n【备用 Google 账号状态 (${otherAccounts.length} 个)】`);
-        for (const [email, entry] of otherAccounts) {
-          if (!entry.access) continue;
+
+        const now = Date.now();
+        const accountPromises = otherAccounts.map(async ([email, entry]) => {
+          if (!entry.access) {
+            return `• ${email} ➔ (未找到 Access Token)`;
+          }
+
+          // 预检 Token 过期时间戳（提前 30 秒认定过期）
+          if (entry.expires && now >= entry.expires - 30_000) {
+            return `• ${email} ➔ (Token 已过期，需在对应账号下激活)`;
+          }
+
           try {
-            const accSummary = await this.fetchUsageWithToken(entry.access, force);
+            // 备用账号超时设为 6 秒，防单一账号拖垮整体响应
+            const accSummary = await this.fetchUsageWithToken(entry.access, force, 6_000);
             const { bucket5h, bucketWeekly } = this.resolveBuckets(accSummary, model?.id);
             const p5h =
               typeof bucket5h?.remainingFraction === "number"
@@ -253,9 +275,16 @@ export class AntigravityAdapter implements QuotaAdapter {
               typeof bucketWeekly?.remainingFraction === "number"
                 ? `${Math.round(bucketWeekly.remainingFraction * 100)}%`
                 : "未知";
-            lines.push(`• ${email} ➔ 5h: ${p5h} | 7d: ${pWeekly}`);
+            return `• ${email} ➔ 5h: ${p5h} | 7d: ${pWeekly}`;
           } catch {
-            lines.push(`• ${email} ➔ (Token 失效或无法读取)`);
+            return `• ${email} ➔ (Token 失效或网络超时)`;
+          }
+        });
+
+        const settledResults = await Promise.allSettled(accountPromises);
+        for (const res of settledResults) {
+          if (res.status === "fulfilled") {
+            lines.push(res.value);
           }
         }
       }

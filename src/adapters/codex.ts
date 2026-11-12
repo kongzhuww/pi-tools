@@ -38,7 +38,8 @@ export class CodexAdapter implements QuotaAdapter {
   private pendingPromise?: Promise<CodexUsageResponse>;
 
   supports(model?: Model<any>): boolean {
-    return model?.provider === "openai-codex";
+    const provider = model?.provider || "";
+    return /^(openai-)?codex$/i.test(provider);
   }
 
   async fetchUsage(ctx: ExtensionContext, force = false): Promise<CodexUsageResponse> {
@@ -108,8 +109,8 @@ export class CodexAdapter implements QuotaAdapter {
     return [
       "【OpenAI Codex 额度详情】",
       `套餐计划：${data.plan_type ?? "默认计划"}`,
-      `• 5小时窗口：剩余 ${pBar} （${formatEpochReset(primary?.reset_at)}后重置）`,
-      `• 7天周窗口：剩余 ${sBar} （${formatEpochReset(secondary?.reset_at)}后重置）`,
+      `• 5小时窗口：剩余 ${pBar} （${formatEpochReset(primary?.reset_at)}重置）`,
+      `• 7天周窗口：剩余 ${sBar} （${formatEpochReset(secondary?.reset_at)}重置）`,
     ].join("\n");
   }
 }
