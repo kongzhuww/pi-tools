@@ -31,6 +31,14 @@
     "linux",
     "productivity"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kongzhuww/pi-desktop-toast.git"
+  },
+  "homepage": "https://github.com/kongzhuww/pi-desktop-toast#readme",
+  "bugs": {
+    "url": "https://github.com/kongzhuww/pi-desktop-toast/issues"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
