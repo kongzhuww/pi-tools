@@ -1,0 +1,15 @@
+node_modules/
+src/
+.github/
+.git/
+.gitignore
+*.tsbuildinfo
+tsconfig.json
+tsup.config.ts
+*.key
+*.pem
+id_*
+*.test.ts
+*.test.js
+remote-mesh.json
+*.local.json

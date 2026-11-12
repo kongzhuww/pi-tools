@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.local.json
+*.key
+*.pem
+id_*
+remote-mesh.json
+*.log
+.env
+.env.*
+.pi/
