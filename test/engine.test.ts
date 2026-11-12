@@ -1,6 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SshEngine } from "../src/ssh-engine.js";
+import { createHash } from "node:crypto";
+
+test("pinned host key accepts the expected key and rejects a different key", () => {
+  const key = Buffer.from("example host key");
+  const fingerprint = `SHA256:${createHash("sha256").update(key).digest("base64").replace(/=+$/, "")}`;
+  const device = { id: "win", host: "example", username: "user", hostKeySha256: fingerprint };
+  const engine = new SshEngine({ win: device });
+  const config = (engine as any).buildConnectConfig(device);
+  assert.equal(config.hostVerifier(key), true);
+  assert.equal(config.hostVerifier(Buffer.from("different key")), false);
+  assert.throws(() => (engine as any).buildConnectConfig({ ...device, hostKeySha256: "bad" }), /Invalid SHA256/);
+  assert.throws(() => (engine as any).buildConnectConfig({ ...device, hostKeySha256: undefined }), /Missing hostKeySha256/);
+});
 
 test("ensureRemoteDir parses nested directories and invokes mkdir sequentially", async () => {
   const engine = new SshEngine({});

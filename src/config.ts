@@ -61,6 +61,7 @@ export function normalizeDeviceConfig(id: string, raw: Partial<DeviceConfig>): D
     features: raw.features || ["exec", "sftp", "status"],
     defaultCwd: raw.defaultCwd || "~",
     connectTimeoutMs: raw.connectTimeoutMs || 10000,
+    hostKeySha256: raw.hostKeySha256,
     keepaliveIntervalMs: raw.keepaliveIntervalMs || 10000,
     keepaliveCountMax: raw.keepaliveCountMax || 3,
     maxOutputBytes: raw.maxOutputBytes || 32768,

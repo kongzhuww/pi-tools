@@ -18,10 +18,10 @@
   完全解耦代码与隐私凭证。代码纯净开源，设备 IP、私钥路径及连接参数全部保存在本机 `~/.pi/remote-mesh.json`，支持 `chmod 600`，绝不上云、绝不入库。
 
 - ⚡ **Persistent SSH & SFTP Engine (长连接与文件传输)**  
-  支持维持低延迟长连接（Keepalive），避免频繁握手；支持原子 SFTP 读写（`read`/`write`），并提供优雅断开连接命令。
+  支持维持低延迟长连接（Keepalive），避免频繁握手；支持 SFTP 读写（`read`/`write`，写入会直接覆盖目标文件，并非原子写入），并提供优雅断开连接命令。
 
 - 🔄 **Local Loopback Bypass (智能防套娃检测)**  
-  可配置 `localBypass`，当 Agent 在 Mac 本地运行时，自动识别并跳过对 Mac 的 SSH 连接，改走本地执行，防止自环回死锁。
+  可配置 `localBypass`，当 Agent 在 Mac 本地运行时，自动识别并拒绝对 Mac 的 SSH 连接；请使用本地工具执行，防止自环回死锁。
 
 ---
 
@@ -34,6 +34,10 @@ pi install npm:pi-remote-mesh
 ```
 
 ---
+
+## 🔒 SSH 主机身份验证
+
+Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint). Connections fail closed if it is absent or mismatched. Verify the fingerprint on the server or through an independent trusted channel before adding it to the local configuration; an unverified `ssh-keyscan` alone does not establish trust. For example, on the server, run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` and compare it independently. Host key rotation requires independently verifying and updating the pin. Existing devices without a pin cannot connect until configured.
 
 ## 🚀 快速上手 (Quickstart)
 
@@ -63,6 +67,7 @@ pi install npm:pi-remote-mesh
       "port": 22,
       "username": "ubuntu",
       "privateKeyPath": "~/.ssh/id_rsa",
+      "hostKeySha256": "SHA256:REPLACE_WITH_INDEPENDENTLY_VERIFIED_FINGERPRINT",
       "features": ["exec", "sftp", "status"],
       "persistent": true,
       "defaultCwd": "/home/ubuntu"
@@ -73,6 +78,7 @@ pi install npm:pi-remote-mesh
       "port": 8022,
       "username": "u0_a100",
       "privateKeyPath": "~/.ssh/termux_key",
+      "hostKeySha256": "SHA256:REPLACE_WITH_INDEPENDENTLY_VERIFIED_FINGERPRINT",
       "features": ["exec", "sftp"],
       "persistent": true
     },
@@ -82,6 +88,7 @@ pi install npm:pi-remote-mesh
       "port": 22,
       "username": "developer",
       "privateKeyPath": "~/.ssh/id_ed25519",
+      "hostKeySha256": "SHA256:REPLACE_WITH_INDEPENDENTLY_VERIFIED_FINGERPRINT",
       "features": ["exec", "status"],
       "persistent": false,
       "localBypass": true,
@@ -110,7 +117,7 @@ pi install npm:pi-remote-mesh
 | **`remote_enable`** | **始终激活 (Always Active)** | 调度中心。接受 `{ device: "vps", action: "enable" \| "disable" \| "disconnect" \| "status" }`。按需将目标设备工具暴露给下一轮对话，或断开连接。 |
 | **`{device}_exec`** | **按需激活 (On-Demand)** | 在远程设备上执行 Bash / Shell 命令，返回 stdout、stderr 与 exitCode。 |
 | **`{device}_read`** | **按需激活 (On-Demand)** | 通过 SFTP 读取远程文件内容（支持 UTF-8 文本与文件大小防爆保护）。 |
-| **`{device}_write`** | **按需激活 (On-Demand)** | 通过 SFTP 原子写入文件到远程目标路径。 |
+| **`{device}_write`** | **按需激活 (On-Demand)** | 通过 SFTP 直接写入并覆盖远程目标文件；写入不是原子的。 |
 | **`{device}_status`**| **按需激活 (On-Demand)** | 实时检测并返回目标设备的 SSH 连接状态与网络连通性。 |
 
 *(注：若配置 `"toolNamingStyle": "prefixed"`，工具名将变为 `remote_{device}_exec` 等。)*

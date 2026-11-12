@@ -1,6 +1,7 @@
 import { Client, type ConnectConfig, type SFTPWrapper } from "ssh2";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { DeviceConfig, DeviceStatus } from "./types.js";
 import { isLocalHost, resolveUserPath } from "./config.js";
 
@@ -45,6 +46,21 @@ export class SshEngine {
       keepaliveInterval: device.keepaliveIntervalMs || 10000,
       keepaliveCountMax: device.keepaliveCountMax || 3,
     };
+
+    if (!device.hostKeySha256) {
+      throw new Error(`Missing hostKeySha256 for device "${device.id}". Verify the SSH host fingerprint independently and configure it before connecting.`);
+    }
+    {
+      const expected = device.hostKeySha256.replace(/^SHA256:/, "").replace(/=+$/, "");
+      if (!/^[A-Za-z0-9+/]{43}$/.test(expected)) {
+        throw new Error(`Invalid SHA256 host key fingerprint for device "${device.id}"`);
+      }
+      config.hostVerifier = (key: Buffer) => {
+        const actual = createHash("sha256").update(key).digest();
+        const pinned = Buffer.from(expected, "base64");
+        return pinned.length === actual.length && timingSafeEqual(actual, pinned);
+      };
+    }
 
     const privateKeyPath = device.privateKeyPath || device.auth?.privateKeyPath;
     if (privateKeyPath) {

@@ -25,6 +25,8 @@ export interface DeviceConfig {
   features?: DeviceFeature[];
   defaultCwd?: string;
   connectTimeoutMs?: number;
+  /** Pinned OpenSSH SHA256 host key fingerprint, e.g. SHA256:... */
+  hostKeySha256?: string;
   keepaliveIntervalMs?: number;
   keepaliveCountMax?: number;
   maxOutputBytes?: number;
