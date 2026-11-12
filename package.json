@@ -30,6 +30,14 @@
     "fleet",
     "sftp"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kongzhuww/pi-remote-mesh.git"
+  },
+  "homepage": "https://github.com/kongzhuww/pi-remote-mesh#readme",
+  "bugs": {
+    "url": "https://github.com/kongzhuww/pi-remote-mesh/issues"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
