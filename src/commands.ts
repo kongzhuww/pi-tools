@@ -5,6 +5,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { RemoteMeshConfig } from "./types.js";
 import { SshEngine } from "./ssh-engine.js";
 import { DEFAULT_CONFIG_FILENAME, generateTemplateConfig } from "./config.js";
+import { updateMeshStatusBar } from "./status-bar.js";
 
 export function registerMeshCommands(
   pi: ExtensionAPI,
@@ -59,6 +60,7 @@ export function registerMeshCommands(
     if (["enable", "disable", "disconnect", "status"].includes(action)) {
       try {
         const res = await handleControl(target, action as any);
+        updateMeshStatusBar(ctx, config, engine);
         if (action === "status") {
           const configInfo = loadedFrom ? `Config: ${loadedFrom}` : "Config: (none loaded, run /remote-mesh init)";
           const statusOutput = JSON.stringify(res.summary, null, 2);

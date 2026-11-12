@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { RemoteMeshConfig, DeviceConfig } from "./types.js";
 import { SshEngine } from "./ssh-engine.js";
+import { updateMeshStatusBar } from "./status-bar.js";
 
 export function getToolNamesForDevice(device: DeviceConfig, style: "compact" | "prefixed" = "compact"): {
   exec?: string;
@@ -61,6 +62,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
             const res = await engine.exec(id, params.command, params.cwd, signal);
+            if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             let text = res.stdout;
             if (res.stderr) {
               text += (text ? "\n" : "") + `[stderr]\n${res.stderr}`;
@@ -98,6 +100,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
             const res = await engine.readFile(id, params.path, params.maxBytes, signal);
+            if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             return {
               content: [{ type: "text", text: res.content }],
               details: { bytes: res.bytes, path: params.path },
@@ -128,6 +131,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
             const res = await engine.writeFile(id, params.path, params.content, signal);
+            if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             return {
               content: [{ type: "text", text: `Successfully wrote ${res.bytes} bytes to ${params.path} on ${id}.` }],
               details: { bytes: res.bytes, path: params.path },
@@ -155,6 +159,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         async execute(_id, _params, _signal, _onUpdate, _ctx) {
           const active = pi.getActiveTools();
           const status = engine.getStatus(id, active.filter((t) => toolNames.all.includes(t)), toolNames.all);
+          if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
           return {
             content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
             details: status,
@@ -264,6 +269,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     async execute(_id, params, _signal, _onUpdate, _ctx) {
       try {
         const result = await handleControl(params.device as string, params.action || "enable");
+        if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
         return {
           content: [
             {
