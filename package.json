@@ -33,6 +33,14 @@
     "tui",
     "statusline"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kongzhuww/pi-smart-quota.git"
+  },
+  "homepage": "https://github.com/kongzhuww/pi-smart-quota#readme",
+  "bugs": {
+    "url": "https://github.com/kongzhuww/pi-smart-quota/issues"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
