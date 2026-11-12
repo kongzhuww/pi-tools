@@ -17,6 +17,8 @@ export interface DeviceConfig {
   port?: number;
   username: string;
   auth?: SshAuthConfig;
+  /** SHA-256 host-key fingerprint in hexadecimal form, as accepted by ssh2. */
+  hostFingerprint?: string;
   // Fallback direct properties for easy configuration
   privateKeyPath?: string;
   passphrase?: string;

@@ -40,6 +40,23 @@ export function findConfigFile(): string | null {
 }
 
 export function normalizeDeviceConfig(id: string, raw: Partial<DeviceConfig>): DeviceConfig {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) {
+    throw new Error(`Invalid device id "${id}". Use letters, numbers, ".", "_" or "-".`);
+  }
+  if (raw.port !== undefined && (!Number.isInteger(raw.port) || raw.port < 1 || raw.port > 65535)) {
+    throw new Error(`Invalid SSH port for device "${id}".`);
+  }
+  for (const [name, value] of [
+    ["connectTimeoutMs", raw.connectTimeoutMs],
+    ["keepaliveIntervalMs", raw.keepaliveIntervalMs],
+    ["keepaliveCountMax", raw.keepaliveCountMax],
+    ["maxOutputBytes", raw.maxOutputBytes],
+    ["maxOutputLines", raw.maxOutputLines],
+  ] as const) {
+    if (value !== undefined && (!Number.isFinite(value) || value <= 0)) {
+      throw new Error(`Invalid ${name} for device "${id}".`);
+    }
+  }
   const auth = raw.auth || {};
   const privateKeyPath = resolveUserPath(raw.privateKeyPath || auth.privateKeyPath || "");
 
@@ -56,6 +73,7 @@ export function normalizeDeviceConfig(id: string, raw: Partial<DeviceConfig>): D
       password: raw.password || auth.password,
       agent: raw.auth?.agent,
     },
+    hostFingerprint: raw.hostFingerprint,
     privateKeyPath: privateKeyPath || undefined,
     persistent: raw.persistent !== false, // default true
     features: raw.features || ["exec", "sftp", "status"],
@@ -108,16 +126,8 @@ export function loadMeshConfig(): { config: RemoteMeshConfig; loadedFrom: string
       loadedFrom: configPath,
     };
   } catch (err) {
-    console.error(`[pi-remote-mesh] Failed to parse config file at ${configPath}:`, err);
-    return {
-      config: {
-        version: "1.0",
-        toolNamingStyle: "compact",
-        onDemandExposure: true,
-        devices: {},
-      },
-      loadedFrom: null,
-    };
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`[pi-remote-mesh] Failed to parse config file at ${configPath}: ${reason}`);
   }
 }
 
@@ -145,7 +155,10 @@ export function isLocalHost(device: DeviceConfig): boolean {
 
   if (device.localHostnames && device.localHostnames.length > 0) {
     const match = device.localHostnames.some(
-      (h) => h.toLowerCase() === currentHost || currentHost.includes(h.toLowerCase()) || h.toLowerCase() === targetHost
+      (h) => {
+        const hostname = h.toLowerCase().replace(/\.$/, "");
+        return hostname === currentHost || hostname === targetHost;
+      }
     );
     if (match) return true;
   }

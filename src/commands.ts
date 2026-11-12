@@ -32,7 +32,7 @@ export function registerMeshCommands(
 
       fs.mkdirSync(targetDir, { recursive: true });
       const template = generateTemplateConfig();
-      fs.writeFileSync(targetFile, JSON.stringify(template, null, 2), "utf-8");
+      fs.writeFileSync(targetFile, JSON.stringify(template, null, 2), { encoding: "utf-8", mode: 0o600 });
       ctx.ui.notify(`Generated template configuration at: ${targetFile}`, "info");
       return;
     }

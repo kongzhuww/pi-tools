@@ -67,3 +67,18 @@ test("isLocalHost detects localhost targets when localBypass is enabled", () => 
   });
   assert.equal(isLocalHost(bypassOff), false);
 });
+
+test("normalizeDeviceConfig validates device ids and numeric limits", () => {
+  assert.throws(
+    () => normalizeDeviceConfig("bad/id", { host: "127.0.0.1" }),
+    /Invalid device id/
+  );
+  assert.throws(
+    () => normalizeDeviceConfig("vps", { host: "127.0.0.1", port: 70000 }),
+    /Invalid SSH port/
+  );
+  assert.throws(
+    () => normalizeDeviceConfig("vps", { host: "127.0.0.1", maxOutputBytes: 0 }),
+    /Invalid maxOutputBytes/
+  );
+});

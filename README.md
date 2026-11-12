@@ -37,7 +37,7 @@ pi install npm:pi-remote-mesh
 
 ## 🔒 SSH 主机身份验证
 
-Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint). Connections fail closed if it is absent or mismatched. Verify the fingerprint on the server or through an independent trusted channel before adding it to the local configuration; an unverified `ssh-keyscan` alone does not establish trust. For example, on the server, run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` and compare it independently. Host key rotation requires independently verifying and updating the pin. Existing devices without a pin cannot connect until configured.
+Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint) or `hostFingerprint` (SHA-256 hex). Connections fail closed if it is absent or mismatched. Verify the fingerprint on the server or through an independent trusted channel before adding it to the local configuration; an unverified `ssh-keyscan` alone does not establish trust. For example, on the server, run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` and compare it independently. Host key rotation requires independently verifying and updating the pin. Existing devices without a pin cannot connect until configured.
 
 ## 🚀 快速上手 (Quickstart)
 
@@ -146,6 +146,7 @@ Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint). Connec
 | `port` | number | `22` | SSH 服务端口 |
 | `username` | string | 当前系统用户 | 远程登录用户名 |
 | `privateKeyPath`| string | 可选 | 私钥绝对路径或 `~/.ssh/...` 相对路径 |
+| `hostKeySha256` / `hostFingerprint` | string | 二选一必填 | 分别接受 OpenSSH SHA256 base64 或 SHA-256 十六进制指纹，未匹配时拒绝连接 |
 | `password` | string | 可选 | 密码认证（建议优先使用私钥） |
 | `passphrase` | string | 可选 | 私钥解密密码 |
 | `persistent` | boolean| `true` | 是否维持长连接复用（单次脚本建议设为 `false`） |

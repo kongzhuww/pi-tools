@@ -11,6 +11,10 @@ test("pinned host key accepts the expected key and rejects a different key", () 
   const config = (engine as any).buildConnectConfig(device);
   assert.equal(config.hostVerifier(key), true);
   assert.equal(config.hostVerifier(Buffer.from("different key")), false);
+  const hex = createHash("sha256").update(key).digest("hex");
+  const hexConfig = (engine as any).buildConnectConfig({ ...device, hostKeySha256: undefined, hostFingerprint: hex });
+  assert.equal(hexConfig.hostVerifier(key), true);
+  assert.equal(hexConfig.hostVerifier(Buffer.from("different key")), false);
   assert.throws(() => (engine as any).buildConnectConfig({ ...device, hostKeySha256: "bad" }), /Invalid SHA256/);
   assert.throws(() => (engine as any).buildConnectConfig({ ...device, hostKeySha256: undefined }), /Missing hostKeySha256/);
 });
