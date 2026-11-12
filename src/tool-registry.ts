@@ -58,9 +58,9 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
           cwd: Type.Optional(Type.String({ description: "Working directory on the remote machine (optional)" })),
         }),
         annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-        async execute(_id, params, _signal, _onUpdate, _ctx) {
+        async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
-            const res = await engine.exec(id, params.command, params.cwd);
+            const res = await engine.exec(id, params.command, params.cwd, signal);
             let text = res.stdout;
             if (res.stderr) {
               text += (text ? "\n" : "") + `[stderr]\n${res.stderr}`;
@@ -95,9 +95,9 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
           maxBytes: Type.Optional(Type.Number({ description: "Maximum bytes to read (default 64KB)" })),
         }),
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-        async execute(_id, params, _signal, _onUpdate, _ctx) {
+        async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
-            const res = await engine.readFile(id, params.path, params.maxBytes);
+            const res = await engine.readFile(id, params.path, params.maxBytes, signal);
             return {
               content: [{ type: "text", text: res.content }],
               details: { bytes: res.bytes, path: params.path },
@@ -125,9 +125,9 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
           content: Type.String({ description: "Content to write" }),
         }),
         annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-        async execute(_id, params, _signal, _onUpdate, _ctx) {
+        async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
-            const res = await engine.writeFile(id, params.path, params.content);
+            const res = await engine.writeFile(id, params.path, params.content, signal);
             return {
               content: [{ type: "text", text: `Successfully wrote ${res.bytes} bytes to ${params.path} on ${id}.` }],
               details: { bytes: res.bytes, path: params.path },

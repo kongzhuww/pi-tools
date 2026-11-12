@@ -129,7 +129,13 @@ export class SshEngine {
     return connectPromise;
   }
 
-  public async exec(id: string, command: string, customCwd?: string): Promise<ExecResult> {
+  public async exec(
+    id: string,
+    command: string,
+    customCwd?: string,
+    signal?: AbortSignal
+  ): Promise<ExecResult> {
+    signal?.throwIfAborted();
     const device = this.getDevice(id);
     const client = await this.getClient(id);
     const startTime = Date.now();
@@ -139,6 +145,8 @@ export class SshEngine {
     if (cwd && cwd !== "~") {
       fullCommand = `cd ${JSON.stringify(cwd)} && (${command})`;
     }
+
+    signal?.throwIfAborted();
 
     return new Promise<ExecResult>((resolve, reject) => {
       client.exec(fullCommand, { env: device.env }, (err, stream) => {
@@ -150,10 +158,52 @@ export class SshEngine {
         let stdoutBuf = "";
         let stderrBuf = "";
         let isTruncated = false;
+        let isAborted = false;
         const maxBytes = device.maxOutputBytes || 32768;
+
+        const onAbort = () => {
+          isAborted = true;
+          try {
+            // Send POSIX SIGINT to remote command
+            stream.signal("INT");
+          } catch {
+            // ignore
+          }
+          try {
+            // Send Ctrl+C character fallback
+            stream.write("\x03");
+          } catch {
+            // ignore
+          }
+          setTimeout(() => {
+            try {
+              stream.close();
+              stream.destroy();
+            } catch {
+              // ignore
+            }
+          }, 150);
+
+          if (!device.persistent) {
+            client.end();
+          }
+
+          reject(new Error(`Command aborted on remote device "${id}" (SIGINT sent).`));
+        };
+
+        if (signal) {
+          if (signal.aborted) {
+            onAbort();
+            return;
+          }
+          signal.addEventListener("abort", onAbort, { once: true });
+        }
 
         stream
           .on("close", (code: number) => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            if (isAborted) return;
+
             if (!device.persistent) {
               client.end();
             }
@@ -211,8 +261,15 @@ export class SshEngine {
     });
   }
 
-  public async readFile(id: string, remotePath: string, maxBytes = 64 * 1024): Promise<{ content: string; bytes: number }> {
+  public async readFile(
+    id: string,
+    remotePath: string,
+    maxBytes = 64 * 1024,
+    signal?: AbortSignal
+  ): Promise<{ content: string; bytes: number }> {
+    signal?.throwIfAborted();
     const sftp = await this.getSftp(id);
+    signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
       sftp.stat(remotePath, (err, stats) => {
         if (err) return reject(new Error(`Remote file not found: ${remotePath} (${err.message})`));
@@ -222,31 +279,98 @@ export class SshEngine {
         }
 
         const stream = sftp.createReadStream(remotePath, { encoding: "utf-8" });
+        const onAbort = () => {
+          try {
+            stream.destroy();
+          } catch {
+            // ignore
+          }
+          reject(new Error("Read aborted by user"));
+        };
+
+        if (signal) {
+          signal.addEventListener("abort", onAbort, { once: true });
+        }
+
         let content = "";
         stream.on("data", (chunk: string) => {
           content += chunk;
         });
         stream.on("end", () => {
+          if (signal) signal.removeEventListener("abort", onAbort);
           resolve({ content, bytes: Buffer.byteLength(content) });
         });
         stream.on("error", (streamErr: Error) => {
+          if (signal) signal.removeEventListener("abort", onAbort);
           reject(streamErr);
         });
       });
     });
   }
 
-  public async writeFile(id: string, remotePath: string, content: string): Promise<{ bytes: number }> {
+  public async ensureRemoteDir(sftp: SFTPWrapper, remoteDir: string): Promise<void> {
+    const normalized = remoteDir.replace(/\\/g, "/");
+    const isAbsolute = normalized.startsWith("/");
+    const parts = normalized.split("/").filter(Boolean);
+
+    let current = isAbsolute ? "" : ".";
+    for (const part of parts) {
+      current = isAbsolute ? `${current}/${part}` : `${current}/${part}`;
+
+      await new Promise<void>((resolve) => {
+        sftp.stat(current, (err, stats) => {
+          if (!err && stats?.isDirectory()) {
+            return resolve();
+          }
+          sftp.mkdir(current, () => {
+            // Ignore potential mkdir error (e.g. already exists)
+            resolve();
+          });
+        });
+      });
+    }
+  }
+
+  public async writeFile(
+    id: string,
+    remotePath: string,
+    content: string,
+    signal?: AbortSignal
+  ): Promise<{ bytes: number }> {
+    signal?.throwIfAborted();
     const sftp = await this.getSftp(id);
     const buffer = Buffer.from(content, "utf-8");
 
+    const normalizedPath = remotePath.replace(/\\/g, "/");
+    const parentDir = path.posix.dirname(normalizedPath);
+    if (parentDir && parentDir !== "." && parentDir !== "/") {
+      await this.ensureRemoteDir(sftp, parentDir);
+    }
+
+    signal?.throwIfAborted();
+
     return new Promise((resolve, reject) => {
-      // Ensure directory exists or write directly
       const writeStream = sftp.createWriteStream(remotePath, { flags: "w", mode: 0o644 });
+
+      const onAbort = () => {
+        try {
+          writeStream.destroy();
+        } catch {
+          // ignore
+        }
+        reject(new Error("Write aborted by user"));
+      };
+
+      if (signal) {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+
       writeStream.on("close", () => {
+        if (signal) signal.removeEventListener("abort", onAbort);
         resolve({ bytes: buffer.length });
       });
       writeStream.on("error", (err: Error) => {
+        if (signal) signal.removeEventListener("abort", onAbort);
         reject(err);
       });
       writeStream.end(buffer);
