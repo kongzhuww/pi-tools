@@ -139,6 +139,7 @@ pi install npm:pi-remote-mesh
 | `port` | number | `22` | SSH 服务端口 |
 | `username` | string | 当前系统用户 | 远程登录用户名 |
 | `privateKeyPath`| string | 可选 | 私钥绝对路径或 `~/.ssh/...` 相对路径 |
+| `hostFingerprint` | string | 可选 | SSH 服务端 SHA-256 指纹（十六进制）；配置后拒绝未匹配的主机 |
 | `password` | string | 可选 | 密码认证（建议优先使用私钥） |
 | `passphrase` | string | 可选 | 私钥解密密码 |
 | `persistent` | boolean| `true` | 是否维持长连接复用（单次脚本建议设为 `false`） |

@@ -45,6 +45,9 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     const toolNames = getToolNamesForDevice(dev, config.toolNamingStyle);
     deviceToolMap.set(id, toolNames.all);
     for (const name of toolNames.all) {
+      if (allMeshToolNames.has(name)) {
+        throw new Error(`Duplicate remote tool name "${name}". Set unique toolPrefix values.`);
+      }
       allMeshToolNames.add(name);
     }
 
@@ -94,7 +97,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         description: `Read text content of a remote file on "${dev.name || id}" (${dev.host}) via SFTP.`,
         parameters: Type.Object({
           path: Type.String({ description: "Remote absolute or relative file path" }),
-          maxBytes: Type.Optional(Type.Number({ description: "Maximum bytes to read (default 64KB)" })),
+          maxBytes: Type.Optional(Type.Number({ description: "Maximum bytes to read (default 64KB)", minimum: 1 })),
         }),
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
         async execute(_id, params, signal, _onUpdate, _ctx) {

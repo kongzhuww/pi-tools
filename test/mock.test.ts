@@ -81,3 +81,18 @@ test("registerMeshTools registers tools and controls visibility on-demand", asyn
   await handleControl("vps", "disable");
   assert.equal(mockPi.getActiveTools().includes("vps_exec"), false);
 });
+
+test("registerMeshTools rejects duplicate tool names", () => {
+  const mockPi = createMockPi();
+  const config: RemoteMeshConfig = {
+    devices: {
+      first: { id: "first", host: "10.0.0.1", username: "user", toolPrefix: "shared_" },
+      second: { id: "second", host: "10.0.0.2", username: "user", toolPrefix: "shared_" },
+    },
+  };
+
+  assert.throws(
+    () => registerMeshTools(mockPi as any, config, new SshEngine(config.devices)),
+    /Duplicate remote tool name/
+  );
+});

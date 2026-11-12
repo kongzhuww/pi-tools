@@ -10,6 +10,7 @@ export interface ExecResult {
   exitCode: number;
   durationMs: number;
   isTruncated?: boolean;
+  exitSignal?: string;
 }
 
 export class SshEngine {
@@ -45,6 +46,12 @@ export class SshEngine {
       keepaliveInterval: device.keepaliveIntervalMs || 10000,
       keepaliveCountMax: device.keepaliveCountMax || 3,
     };
+
+    if (device.hostFingerprint) {
+      config.hostHash = "sha256";
+      config.hostVerifier = (fingerprint: string) =>
+        fingerprint.toLowerCase() === device.hostFingerprint!.toLowerCase().replace(/:/g, "");
+    }
 
     const privateKeyPath = device.privateKeyPath || device.auth?.privateKeyPath;
     if (privateKeyPath) {
@@ -200,7 +207,7 @@ export class SshEngine {
         }
 
         stream
-          .on("close", (code: number) => {
+          .on("close", (code: number | null, exitSignal?: string) => {
             if (signal) signal.removeEventListener("abort", onAbort);
             if (isAborted) return;
 
@@ -220,23 +227,26 @@ export class SshEngine {
             resolve({
               stdout: finalStdout,
               stderr: stderrBuf,
-              exitCode: typeof code === "number" ? code : 0,
+              exitCode: typeof code === "number" ? code : -1,
               durationMs: Date.now() - startTime,
               isTruncated,
+              exitSignal,
             });
           })
           .on("data", (data: Buffer) => {
-            if (stdoutBuf.length < maxBytes) {
-              stdoutBuf += data.toString("utf-8");
-              if (stdoutBuf.length >= maxBytes) {
-                stdoutBuf = stdoutBuf.slice(0, maxBytes) + "\n... [output truncated by pi-remote-mesh]";
+            if (Buffer.byteLength(stdoutBuf, "utf-8") < maxBytes) {
+              const remaining = maxBytes - Buffer.byteLength(stdoutBuf, "utf-8");
+              stdoutBuf += data.subarray(0, remaining).toString("utf-8");
+              if (data.length > remaining) {
+                stdoutBuf += "\n... [output truncated by pi-remote-mesh]";
                 isTruncated = true;
               }
             }
           })
           .stderr.on("data", (data: Buffer) => {
-            if (stderrBuf.length < maxBytes) {
-              stderrBuf += data.toString("utf-8");
+            if (Buffer.byteLength(stderrBuf, "utf-8") < maxBytes) {
+              const remaining = maxBytes - Buffer.byteLength(stderrBuf, "utf-8");
+              stderrBuf += data.subarray(0, remaining).toString("utf-8");
             }
           });
       });
@@ -268,6 +278,9 @@ export class SshEngine {
     signal?: AbortSignal
   ): Promise<{ content: string; bytes: number }> {
     signal?.throwIfAborted();
+    if (!Number.isFinite(maxBytes) || maxBytes <= 0) {
+      throw new Error("maxBytes must be a positive finite number");
+    }
     const sftp = await this.getSftp(id);
     signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
@@ -278,7 +291,7 @@ export class SshEngine {
           return reject(new Error(`Remote file is too large (${stats.size} bytes > limit ${maxBytes} bytes)`));
         }
 
-        const stream = sftp.createReadStream(remotePath, { encoding: "utf-8" });
+        const stream = sftp.createReadStream(remotePath);
         const onAbort = () => {
           try {
             stream.destroy();
@@ -293,12 +306,24 @@ export class SshEngine {
         }
 
         let content = "";
-        stream.on("data", (chunk: string) => {
-          content += chunk;
+        let bytes = 0;
+        let overLimit = false;
+        stream.on("data", (chunk: Buffer) => {
+          if (overLimit) return;
+          const remaining = maxBytes - bytes;
+          const accepted = chunk.subarray(0, remaining);
+          content += accepted.toString("utf-8");
+          bytes += accepted.length;
+          if (accepted.length < chunk.length) {
+            overLimit = true;
+            stream.destroy();
+            reject(new Error(`Remote file exceeded the ${maxBytes}-byte limit while reading`));
+          }
         });
         stream.on("end", () => {
+          if (overLimit) return;
           if (signal) signal.removeEventListener("abort", onAbort);
-          resolve({ content, bytes: Buffer.byteLength(content) });
+          resolve({ content, bytes });
         });
         stream.on("error", (streamErr: Error) => {
           if (signal) signal.removeEventListener("abort", onAbort);
@@ -317,15 +342,18 @@ export class SshEngine {
     for (const part of parts) {
       current = isAbsolute ? `${current}/${part}` : `${current}/${part}`;
 
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         sftp.stat(current, (err, stats) => {
           if (!err && stats?.isDirectory()) {
             return resolve();
           }
-          sftp.mkdir(current, () => {
-            // Ignore potential mkdir error (e.g. already exists)
-            resolve();
-          });
+            sftp.mkdir(current, (mkdirErr) => {
+              if (!mkdirErr) return resolve();
+              sftp.stat(current, (retryErr, retryStats) => {
+                if (!retryErr && retryStats?.isDirectory()) return resolve();
+                reject(mkdirErr);
+              });
+            });
         });
       });
     }
@@ -350,7 +378,13 @@ export class SshEngine {
     signal?.throwIfAborted();
 
     return new Promise((resolve, reject) => {
-      const writeStream = sftp.createWriteStream(remotePath, { flags: "w", mode: 0o644 });
+      const tempPath = `${remotePath}.pi-remote-mesh-${process.pid}-${Date.now()}`;
+      const writeStream = sftp.createWriteStream(tempPath, { flags: "w", mode: 0o644 });
+      let settled = false;
+
+      const cleanup = () => {
+        if (signal) signal.removeEventListener("abort", onAbort);
+      };
 
       const onAbort = () => {
         try {
@@ -358,7 +392,12 @@ export class SshEngine {
         } catch {
           // ignore
         }
-        reject(new Error("Write aborted by user"));
+        if (!settled) {
+          settled = true;
+          cleanup();
+          sftp.unlink(tempPath, () => undefined);
+          reject(new Error("Write aborted by user"));
+        }
       };
 
       if (signal) {
@@ -366,11 +405,18 @@ export class SshEngine {
       }
 
       writeStream.on("close", () => {
-        if (signal) signal.removeEventListener("abort", onAbort);
-        resolve({ bytes: buffer.length });
+        if (settled) return;
+        sftp.rename(tempPath, remotePath, (err) => {
+          settled = true;
+          cleanup();
+          if (err) return reject(err);
+          resolve({ bytes: buffer.length });
+        });
       });
       writeStream.on("error", (err: Error) => {
-        if (signal) signal.removeEventListener("abort", onAbort);
+        settled = true;
+        cleanup();
+        sftp.unlink(tempPath, () => undefined);
         reject(err);
       });
       writeStream.end(buffer);

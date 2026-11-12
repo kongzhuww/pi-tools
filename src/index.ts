@@ -27,6 +27,5 @@ export default function (pi: ExtensionAPI) {
   // 会话关闭时清理状态栏与持久连接
   pi.on("session_shutdown", async (_event, ctx) => {
     clearMeshStatusBar(ctx, config);
-    await engine.disconnectAll();
   });
 }
