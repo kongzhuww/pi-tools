@@ -126,6 +126,14 @@ export function isLocalHost(device: DeviceConfig): boolean {
   const currentHost = os.hostname().toLowerCase();
   const targetHost = device.host.toLowerCase();
 
+  // 跨平台自动特征探测：Mac 本机上目标是 mac；Windows 本机上目标是 win
+  if (process.platform === "darwin" && /mac/i.test(device.id)) {
+    return true;
+  }
+  if (process.platform === "win32" && /win/i.test(device.id)) {
+    return true;
+  }
+
   if (targetHost === "localhost" || targetHost === "127.0.0.1" || targetHost === "::1") {
     return true;
   }
@@ -136,7 +144,7 @@ export function isLocalHost(device: DeviceConfig): boolean {
 
   if (device.localHostnames && device.localHostnames.length > 0) {
     const match = device.localHostnames.some(
-      (h) => h.toLowerCase() === currentHost || h.toLowerCase() === targetHost
+      (h) => h.toLowerCase() === currentHost || currentHost.includes(h.toLowerCase()) || h.toLowerCase() === targetHost
     );
     if (match) return true;
   }
