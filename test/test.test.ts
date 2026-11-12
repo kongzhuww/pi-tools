@@ -66,6 +66,18 @@ test("isLocalHost detects localhost targets when localBypass is enabled", () => 
     localBypass: false,
   });
   assert.equal(isLocalHost(bypassOff), false);
+
+  const remoteMac = normalizeDeviceConfig("mac", {
+    host: "different-mac.example",
+    localBypass: true,
+    localHostnames: ["different-mac.example"],
+  });
+  assert.equal(isLocalHost(remoteMac), false);
+
+  const localAddress = Object.values(os.networkInterfaces()).flatMap(entries => entries ?? []).find(item => !item.internal && item.family === "IPv4")?.address;
+  if (localAddress) {
+    assert.equal(isLocalHost(normalizeDeviceConfig("workstation", { host: localAddress, localBypass: true })), true);
+  }
 });
 
 test("normalizeDeviceConfig validates device ids and numeric limits", () => {

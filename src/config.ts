@@ -25,7 +25,6 @@ export function getConfigPaths(): string[] {
   const piDir = path.join(os.homedir(), ".pi");
   paths.push(path.join(piDir, DEFAULT_CONFIG_FILENAME));
   paths.push(path.join(piDir, LEGACY_CONFIG_FILENAME));
-  paths.push(path.join(process.cwd(), DEFAULT_CONFIG_FILENAME));
 
   return paths;
 }
@@ -137,17 +136,12 @@ export function isLocalHost(device: DeviceConfig): boolean {
   const currentHost = os.hostname().toLowerCase();
   const targetHost = device.host.toLowerCase();
 
-  // 跨平台自动特征探测：Mac 本机上目标是 mac；Windows 本机上目标是 win
-  if (process.platform === "darwin" && /mac/i.test(device.id)) {
-    return true;
-  }
-  if (process.platform === "win32" && /win/i.test(device.id)) {
-    return true;
-  }
-
   if (targetHost === "localhost" || targetHost === "127.0.0.1" || targetHost === "::1") {
     return true;
   }
+
+  const localAddresses = Object.values(os.networkInterfaces()).flatMap(items => items ?? []);
+  if (localAddresses.some(item => item.address.toLowerCase() === targetHost)) return true;
 
   if (currentHost === targetHost || currentHost.split(".")[0] === targetHost.split(".")[0]) {
     return true;
@@ -157,7 +151,7 @@ export function isLocalHost(device: DeviceConfig): boolean {
     const match = device.localHostnames.some(
       (h) => {
         const hostname = h.toLowerCase().replace(/\.$/, "");
-        return hostname === currentHost || hostname === targetHost;
+        return hostname === currentHost || hostname === currentHost.split(".")[0];
       }
     );
     if (match) return true;
@@ -179,6 +173,7 @@ export function generateTemplateConfig(): RemoteMeshConfig {
         port: 22,
         username: "ubuntu",
         privateKeyPath: "~/.ssh/id_rsa",
+        hostKeySha256: "SHA256:REPLACE_WITH_INDEPENDENTLY_VERIFIED_FINGERPRINT",
         features: ["exec", "sftp", "status"],
         persistent: true,
         defaultCwd: "/home/ubuntu",
@@ -190,6 +185,7 @@ export function generateTemplateConfig(): RemoteMeshConfig {
         port: 22,
         username: "developer",
         privateKeyPath: "~/.ssh/id_ed25519",
+        hostKeySha256: "SHA256:REPLACE_WITH_INDEPENDENTLY_VERIFIED_FINGERPRINT",
         features: ["exec", "status"],
         persistent: false,
         localBypass: true,

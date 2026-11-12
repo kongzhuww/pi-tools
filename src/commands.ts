@@ -12,7 +12,7 @@ export function registerMeshCommands(
   config: RemoteMeshConfig,
   loadedFrom: string | null,
   engine: SshEngine,
-  handleControl: (device: string, action: "enable" | "disable" | "disconnect" | "status") => Promise<any>
+  handleControl: (device: string, action: "enable" | "disable" | "disconnect" | "status", ctx?: ExtensionContext) => Promise<any>
 ) {
   const deviceList = Object.keys(config.devices);
 
@@ -49,7 +49,9 @@ export function registerMeshCommands(
       }
       ctx.ui.notify(`Testing SSH connection to "${devId}" (${config.devices[devId].host})...`, "info");
       try {
+        await handleControl(devId, "enable", ctx);
         const res = await engine.exec(devId, "echo 'SSH_CONNECTION_SUCCESS' && uname -a || ver");
+        if (res.exitCode !== 0) throw new Error(`Connection test exited with code ${res.exitCode}: ${res.stderr}`);
         ctx.ui.notify(`[${devId}] Connected successfully!\n${res.stdout.trim()}`, "info");
       } catch (err) {
         ctx.ui.notify(`[${devId}] Connection failed: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -59,7 +61,7 @@ export function registerMeshCommands(
 
     if (["enable", "disable", "disconnect", "status"].includes(action)) {
       try {
-        const res = await handleControl(target, action as any);
+        const res = await handleControl(target, action as any, ctx);
         updateMeshStatusBar(ctx, config, engine);
         if (action === "status") {
           const configInfo = loadedFrom ? `Config: ${loadedFrom}` : "Config: (none loaded, run /remote-mesh init)";

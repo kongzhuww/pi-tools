@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SshEngine } from "../src/ssh-engine.js";
+import { SshEngine, quotePosixShell } from "../src/ssh-engine.js";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+
+test("POSIX directory quoting prevents interpolation and preserves literal content", () => {
+  const value = `literal ' \" $(printf injected) \`printf injected\` $HOME`;
+  const result = spawnSync("sh", ["-c", `printf %s ${quotePosixShell(value)}`], { encoding: "utf8" });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, value);
+  assert.throws(() => quotePosixShell("a\0b"), /NUL/);
+});
 
 test("pinned host key accepts the expected key and rejects a different key", () => {
   const key = Buffer.from("example host key");

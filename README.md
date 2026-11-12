@@ -8,17 +8,17 @@
 ## 🌟 核心特性 (Features)
 
 - 🎯 **On-Demand Tool Exposure (按需工具暴露)**  
-  传统方案会将所有设备的 SSH 工具（数十个 Schema）一股脑全塞进 System Prompt，每轮对话白白浪费数千 Token，且容易引起大模型工具幻觉。  
+  多设备工具可以按需暴露，减少当前请求中的工具声明；具体 Token 和缓存影响取决于模型及运行环境。
   `pi-remote-mesh` 默认只暴露一个极轻量的 `remote_enable` 统一调度入口；当模型或用户需要操作特定设备时（如 VPS 或开发板），**动态将该设备工具注入当前会话，用完随时关闭或在重启时自动重置**。
 
 - 🌐 **Multi-Device Mesh Topology (多端网格拓扑)**  
   无论你有几台设备（云端 VPS、常驻 Mac mini、Windows 主力机、安卓 Termux、树莓派/Arduino 开发板），只需在本地配置中声明，即可获得对应的执行与传输能力。
 
 - 🔒 **Zero-Secret Design (零凭证硬编码)**  
-  完全解耦代码与隐私凭证。代码纯净开源，设备 IP、私钥路径及连接参数全部保存在本机 `~/.pi/remote-mesh.json`，支持 `chmod 600`，绝不上云、绝不入库。
+  配置默认存放在本机 `~/.pi/remote-mesh.json`，建议设置 `chmod 600`；不要将凭据、私钥或敏感配置提交仓库。设备名称和地址可能出现在工具描述或输出中，应按模型提供商的隐私策略处理。
 
 - ⚡ **Persistent SSH & SFTP Engine (长连接与文件传输)**  
-  支持维持低延迟长连接（Keepalive），避免频繁握手；支持 SFTP 读写（`read`/`write`，写入会直接覆盖目标文件，并非原子写入），并提供优雅断开连接命令。
+  支持 SSH 连接复用与 SFTP 文件读写。写入先使用独占创建的临时文件，再请求服务器重命名；覆盖行为和原子性取决于服务器，无法保证所有服务器都支持覆盖。
 
 - 🔄 **Local Loopback Bypass (智能防套娃检测)**  
   可配置 `localBypass`，当 Agent 在 Mac 本地运行时，自动识别并拒绝对 Mac 的 SSH 连接；请使用本地工具执行，防止自环回死锁。
@@ -27,11 +27,13 @@
 
 ## 📦 安装 (Installation)
 
-在终端或 Pi 会话中一键安装：
+实验性项目，部署前请审查安全策略与依赖。可从 GitHub 安装：
 
 ```bash
-pi install npm:pi-remote-mesh
+pi install git:github.com/kongzhuww/pi-remote-mesh
 ```
+
+npm 包尚未发布；不要假定 npm 安装可用。
 
 ---
 
@@ -100,11 +102,13 @@ Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint) or `hos
 
 ### 3. 测试连通性
 
+配置修改后先 `/reload` 或重启 Pi，再运行测试：
+
 ```bash
 /remote-mesh test vps
 ```
 
-测试成功后，运行 `/reload` 或重启 Pi 即可生效！
+首次启用设备时确认一次；在同一会话中后续执行与文件写入不再逐次确认。断开、重载或切换会话后需重新授权。无交互 UI 时默认拒绝授权。这个授权允许任意远程命令与写入，插件并非沙箱，也无法保证 AI 不会误操作。取消操作只请求中断，不能保证远端子进程或后台任务停止。
 
 ---
 
@@ -117,8 +121,8 @@ Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint) or `hos
 | **`remote_enable`** | **始终激活 (Always Active)** | 调度中心。接受 `{ device: "vps", action: "enable" \| "disable" \| "disconnect" \| "status" }`。按需将目标设备工具暴露给下一轮对话，或断开连接。 |
 | **`{device}_exec`** | **按需激活 (On-Demand)** | 在远程设备上执行 Bash / Shell 命令，返回 stdout、stderr 与 exitCode。 |
 | **`{device}_read`** | **按需激活 (On-Demand)** | 通过 SFTP 读取远程文件内容（支持 UTF-8 文本与文件大小防爆保护）。 |
-| **`{device}_write`** | **按需激活 (On-Demand)** | 通过 SFTP 直接写入并覆盖远程目标文件；写入不是原子的。 |
-| **`{device}_status`**| **按需激活 (On-Demand)** | 实时检测并返回目标设备的 SSH 连接状态与网络连通性。 |
+| **`{device}_write`** | **按需激活 (On-Demand)** | 通过 SFTP 临时文件写入后请求重命名；覆盖及原子性由服务器决定。 |
+| **`{device}_status`**| **按需激活 (On-Demand)** | 返回本地记录的连接状态，不主动探测网络连通性。 |
 
 *(注：若配置 `"toolNamingStyle": "prefixed"`，工具名将变为 `remote_{device}_exec` 等。)*
 
@@ -151,7 +155,7 @@ Every device requires `hostKeySha256` (OpenSSH `SHA256:...` fingerprint) or `hos
 | `passphrase` | string | 可选 | 私钥解密密码 |
 | `persistent` | boolean| `true` | 是否维持长连接复用（单次脚本建议设为 `false`） |
 | `features` | array | `["exec", "sftp", "status"]` | 启用的功能模块列表 |
-| `defaultCwd` | string | `"~"` | 远程命令默认执行工作目录 |
+| `defaultCwd` | string | `"~"` | 远程命令默认目录；非默认目录使用 POSIX Shell 引用，非 POSIX 远端应保持默认并使用其原生命令语法 |
 | `connectTimeoutMs` | number | `10000` | 连接超时时间（毫秒） |
 | `maxOutputBytes` | number | `32768` | 终端最大截断字节数，防止长输出爆内存 |
 | `maxOutputLines` | number | `300` | 终端最大输出行数 |

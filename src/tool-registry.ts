@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { RemoteMeshConfig, DeviceConfig } from "./types.js";
 import { SshEngine } from "./ssh-engine.js";
@@ -40,6 +40,13 @@ export function getToolNamesForDevice(device: DeviceConfig, style: "compact" | "
 export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, engine: SshEngine) {
   const allMeshToolNames = new Set<string>();
   const deviceToolMap = new Map<string, string[]>();
+  const approved = new Set<string>();
+  let sessionGeneration = 0;
+  const deviceGenerations = new Map<string, number>();
+  let approvalQueue: Promise<void> = Promise.resolve();
+  const requireApproval = (id: string) => {
+    if (!approved.has(id)) throw new Error(`Device "${id}" is not authorized in this session. Enable it and approve first.`);
+  };
 
   for (const [id, dev] of Object.entries(config.devices)) {
     const toolNames = getToolNamesForDevice(dev, config.toolNamingStyle);
@@ -55,15 +62,17 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     if (toolNames.exec) {
       pi.registerTool({
         name: toolNames.exec,
+        defaultActive: false,
         label: `${dev.name || id} Exec`,
         description: `Execute a shell command on remote machine "${dev.name || id}" (${dev.host}). Returns stdout, stderr and exit code.`,
         parameters: Type.Object({
           command: Type.String({ description: "The shell command to execute remotely" }),
           cwd: Type.Optional(Type.String({ description: "Working directory on the remote machine (optional)" })),
         }),
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
+            requireApproval(id);
             const res = await engine.exec(id, params.command, params.cwd, signal);
             if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             let text = res.stdout;
@@ -93,6 +102,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     if (toolNames.read) {
       pi.registerTool({
         name: toolNames.read,
+        defaultActive: false,
         label: `${dev.name || id} Read`,
         description: `Read text content of a remote file on "${dev.name || id}" (${dev.host}) via SFTP.`,
         parameters: Type.Object({
@@ -102,6 +112,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
+            requireApproval(id);
             const res = await engine.readFile(id, params.path, params.maxBytes, signal);
             if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             return {
@@ -124,6 +135,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     if (toolNames.write) {
       pi.registerTool({
         name: toolNames.write,
+        defaultActive: false,
         label: `${dev.name || id} Write`,
         description: `Write text content to a remote file on "${dev.name || id}" (${dev.host}) via SFTP.`,
         parameters: Type.Object({
@@ -133,6 +145,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
         annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
         async execute(_id, params, signal, _onUpdate, _ctx) {
           try {
+            requireApproval(id);
             const res = await engine.writeFile(id, params.path, params.content, signal);
             if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
             return {
@@ -155,6 +168,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     if (toolNames.status) {
       pi.registerTool({
         name: toolNames.status,
+        defaultActive: false,
         label: `${dev.name || id} Status`,
         description: `Check connection and reachability status for remote machine "${dev.name || id}".`,
         parameters: Type.Object({}),
@@ -175,6 +189,8 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
 
   // Session start: if on-demand exposure is enabled, hide device tools by default
   pi.on("session_start", () => {
+    sessionGeneration++;
+    approved.clear();
     if (config.onDemandExposure) {
       const currentActive = pi.getActiveTools();
       pi.setActiveTools(currentActive.filter((t) => !allMeshToolNames.has(t)));
@@ -183,14 +199,43 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
 
   // Session shutdown: gracefully close all persistent connections
   pi.on("session_shutdown", async () => {
+    sessionGeneration++;
+    approved.clear();
     await engine.disconnectAll();
   });
 
   // Controller function for enabling / disabling / disconnecting
   const handleControl = async (
     targetDevice: string,
-    action: "enable" | "disable" | "disconnect" | "status"
+    action: "enable" | "disable" | "disconnect" | "status",
+    ctx?: ExtensionContext
   ) => {
+    if (targetDevice !== "all" && !Object.hasOwn(config.devices, targetDevice)) throw new Error(`Unknown device: ${targetDevice}`);
+    if (!["enable", "disable", "disconnect", "status"].includes(action)) throw new Error(`Unknown action: ${action}`);
+    const targets = targetDevice === "all" ? Object.keys(config.devices) : [targetDevice];
+    if (action === "enable") {
+      const generation = sessionGeneration;
+      const deviceSnapshot = targets.map(id => deviceGenerations.get(id) ?? 0);
+      const requestApproval = approvalQueue.then(async () => {
+        ctx?.signal?.throwIfAborted();
+        if (generation !== sessionGeneration || targets.some((id, i) => (deviceGenerations.get(id) ?? 0) !== deviceSnapshot[i])) {
+          throw new Error("Session or device authorization changed while awaiting remote approval.");
+        }
+        const pending = targets.filter(id => !approved.has(id));
+        if (!pending.length) return;
+        if (!ctx?.hasUI) throw new Error("Interactive approval required; no UI is available.");
+        const description = pending.map(id => `${id}: ${config.devices[id].username}@${config.devices[id].host}:${config.devices[id].port ?? 22}`).join("\n");
+        const ok = await ctx.ui.confirm("Authorize remote devices for this session?", `${description}\n\nAfter approval, commands and file writes are permitted without further prompts until disconnect or session restart.`);
+        ctx.signal?.throwIfAborted();
+        if (generation !== sessionGeneration || targets.some((id, i) => (deviceGenerations.get(id) ?? 0) !== deviceSnapshot[i])) {
+          throw new Error("Session or device authorization changed while awaiting remote approval.");
+        }
+        if (!ok) throw new Error("Remote device authorization declined.");
+        for (const id of pending) approved.add(id);
+      });
+      approvalQueue = requestApproval.catch(() => {});
+      await requestApproval;
+    }
     const activeSet = new Set(pi.getActiveTools());
     const validDeviceIds = Object.keys(config.devices);
 
@@ -224,11 +269,16 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
       }
 
       if (action === "disconnect") {
-        disconnectResults[devId] = await engine.disconnect(devId);
+        approved.delete(devId);
+        deviceGenerations.set(devId, (deviceGenerations.get(devId) ?? 0) + 1);
       }
     }
 
+    // Hide tools before awaiting disconnect so new turns cannot start work.
     pi.setActiveTools([...activeSet]);
+    if (action === "disconnect") {
+      for (const devId of devicesToActOn) disconnectResults[devId] = await engine.disconnect(devId);
+    }
 
     return {
       target: targetDevice,
@@ -271,7 +321,7 @@ export function registerMeshTools(pi: ExtensionAPI, config: RemoteMeshConfig, en
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     async execute(_id, params, _signal, _onUpdate, _ctx) {
       try {
-        const result = await handleControl(params.device as string, params.action || "enable");
+        const result = await handleControl(params.device as string, params.action || "enable", _ctx);
         if (_ctx?.ui) updateMeshStatusBar(_ctx, config, engine);
         return {
           content: [
