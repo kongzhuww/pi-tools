@@ -1,0 +1,71 @@
+{
+  "name": "pi-desktop-toast",
+  "version": "1.0.0",
+  "description": "Zero-dependency native OS desktop notifications (macOS, Windows, Linux) for Pi Coding Agent",
+  "author": "kongzhu",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "notification",
+    "toast",
+    "desktop-notification",
+    "macos",
+    "windows",
+    "linux",
+    "productivity"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kongzhuww/pi-desktop-toast.git"
+  },
+  "homepage": "https://github.com/kongzhuww/pi-desktop-toast#readme",
+  "bugs": {
+    "url": "https://github.com/kongzhuww/pi-desktop-toast/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "node --test tests/**/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.5.2",
+    "@types/node": "^24.10.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
