@@ -1,0 +1,45 @@
+{
+  "name": "pi-command-aliases",
+  "version": "0.4.3",
+  "description": "Visual command alias manager and slash-command forwarding suite for Pi coding agent",
+  "type": "module",
+  "license": "MIT",
+  "author": "kongzhuww",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kongzhuww/pi-command-aliases.git"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-skill",
+    "command-alias",
+    "slash-commands",
+    "tui",
+    "productivity"
+  ],
+  "files": [
+    "index.ts",
+    "completion.ts",
+    "manager.ts",
+    "picker.ts",
+    "storage.ts",
+    "skills",
+    "README.md",
+    "README_zh.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills/*"
+    ]
+  }
+}
