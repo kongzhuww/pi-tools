@@ -35,7 +35,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/kongzhuww/pi-smart-quota.git"
+    "url": "https://github.com/kongzhuww/pi-tools.git",
+    "directory": "packages/smart-quota"
   },
   "homepage": "https://github.com/kongzhuww/pi-smart-quota#readme",
   "bugs": {

@@ -7,7 +7,8 @@
   "author": "kongzhuww",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kongzhuww/pi-command-aliases.git"
+    "url": "https://github.com/kongzhuww/pi-tools.git",
+    "directory": "packages/command-aliases"
   },
   "keywords": [
     "pi-package",
