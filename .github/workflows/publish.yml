@@ -27,13 +27,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck & Test
-        run: |
-          npm run typecheck
-          npm test
-
       - name: Build all packages
         run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
       - name: Publish unreleased packages
         run: node scripts/publish-changed.mjs
