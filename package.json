@@ -33,7 +33,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/kongzhuww/pi-remote-mesh.git"
+    "url": "git+https://github.com/kongzhuww/pi-remote-mesh.git"
   },
   "homepage": "https://github.com/kongzhuww/pi-remote-mesh#readme",
   "bugs": {
