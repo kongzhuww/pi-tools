@@ -36,9 +36,9 @@
     "url": "https://github.com/kongzhuww/pi-tools.git",
     "directory": "packages/desktop-toast"
   },
-  "homepage": "https://github.com/kongzhuww/pi-desktop-toast#readme",
+  "homepage": "https://github.com/kongzhuww/pi-tools/tree/main/packages/desktop-toast#readme",
   "bugs": {
-    "url": "https://github.com/kongzhuww/pi-desktop-toast/issues"
+    "url": "https://github.com/kongzhuww/pi-tools/issues"
   },
   "scripts": {
     "build": "tsup",

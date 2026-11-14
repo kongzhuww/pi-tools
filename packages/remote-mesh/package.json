@@ -36,9 +36,9 @@
     "url": "https://github.com/kongzhuww/pi-tools.git",
     "directory": "packages/remote-mesh"
   },
-  "homepage": "https://github.com/kongzhuww/pi-remote-mesh#readme",
+  "homepage": "https://github.com/kongzhuww/pi-tools/tree/main/packages/remote-mesh#readme",
   "bugs": {
-    "url": "https://github.com/kongzhuww/pi-remote-mesh/issues"
+    "url": "https://github.com/kongzhuww/pi-tools/issues"
   },
   "scripts": {
     "build": "tsup",

@@ -10,6 +10,10 @@
     "url": "https://github.com/kongzhuww/pi-tools.git",
     "directory": "packages/command-aliases"
   },
+  "homepage": "https://github.com/kongzhuww/pi-tools/tree/main/packages/command-aliases#readme",
+  "bugs": {
+    "url": "https://github.com/kongzhuww/pi-tools/issues"
+  },
   "keywords": [
     "pi-package",
     "pi-extension",

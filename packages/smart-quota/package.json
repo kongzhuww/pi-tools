@@ -38,9 +38,9 @@
     "url": "https://github.com/kongzhuww/pi-tools.git",
     "directory": "packages/smart-quota"
   },
-  "homepage": "https://github.com/kongzhuww/pi-smart-quota#readme",
+  "homepage": "https://github.com/kongzhuww/pi-tools/tree/main/packages/smart-quota#readme",
   "bugs": {
-    "url": "https://github.com/kongzhuww/pi-smart-quota/issues"
+    "url": "https://github.com/kongzhuww/pi-tools/issues"
   },
   "scripts": {
     "build": "tsup",
