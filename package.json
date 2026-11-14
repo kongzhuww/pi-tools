@@ -1,6 +1,6 @@
 {
   "name": "pi-remote-mesh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Multi-device remote SSH execution mesh and on-demand tool exposure for Pi Coding Agent",
   "author": "kongzhu",
   "license": "MIT",
